@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:latest
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    # Port 27017 is explicitly NOT mapped to the host
+    # This prevents internet access to the database
+
+  server:
+    build: ./server
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/bharat_beauty
+      - PORT=5000
+      - JWT_SECRET=BharatBeauty@SuperSecret2024
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - mongo
+
+  client:
+    build: ./client
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+
+volumes:
+  mongo_data:
+  uploads_data:
