@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:latest
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    # MongoDB NOT exposed to internet — internal only
+
+  server:
+    build: ./server
+    restart: always
+    ports:
+      - "5000:5000"   # Exposed so host Nginx can proxy to it
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/bharat_beauty
+      - PORT=5000
+      - JWT_SECRET=${JWT_SECRET}   # Set in .env on VPS — do NOT hardcode
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - mongo
+
+  # Client served separately by host Nginx (not Docker)
+  # If you want to serve web via Docker too, uncomment below:
+  # client:
+  #   build: ./client
+  #   restart: always
+  #   ports:
+  #     - "8080:80"
+  #   depends_on:
+  #     - server
+
+volumes:
+  mongo_data:
+  uploads_data:

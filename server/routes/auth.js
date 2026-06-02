@@ -71,11 +71,14 @@ router.post('/seed', async (req, res) => {
     const existing = await User.findOne({ sectionId: 'ADMIN-01' });
     if (existing) return res.json({ message: 'Seed already done' });
 
-    await User.create([
-      { name: 'Admin',         sectionId: 'ADMIN-01',   password: 'admin123',   section: 'admin',   role: 'admin' },
-      { name: 'Beauty Manager',sectionId: 'BEAUTY-01',  password: 'beauty123',  section: 'beauty',  role: 'user'  },
+    const users = [
+      { name: 'Admin',          sectionId: 'ADMIN-01',   password: 'admin123',   section: 'admin',   role: 'admin' },
+      { name: 'Beauty Manager', sectionId: 'BEAUTY-01',  password: 'beauty123',  section: 'beauty',  role: 'user'  },
       { name: 'Bangles Manager',sectionId: 'BANGLES-01', password: 'bangles123', section: 'bangles', role: 'user'  },
-    ]);
+    ];
+    for (const u of users) {
+      await new User(u).save();
+    }
     res.json({ message: 'Default users created successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
