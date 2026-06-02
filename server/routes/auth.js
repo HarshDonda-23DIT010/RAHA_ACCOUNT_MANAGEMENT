@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const { protect } = require('../middleware/auth');
+const protect = require('../middleware/auth');
 
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -72,9 +72,9 @@ router.post('/seed', async (req, res) => {
     if (existing) return res.json({ message: 'Seed already done' });
 
     const users = [
-      { name: 'Admin',          sectionId: 'ADMIN-01',   password: 'admin123',   section: 'admin',   role: 'admin' },
-      { name: 'Beauty Manager', sectionId: 'BEAUTY-01',  password: 'beauty123',  section: 'beauty',  role: 'user'  },
-      { name: 'Bangles Manager',sectionId: 'BANGLES-01', password: 'bangles123', section: 'bangles', role: 'user'  },
+      { name: 'Admin', sectionId: 'ADMIN-01', password: 'admin123', section: 'admin', role: 'admin' },
+      { name: 'Beauty Manager', sectionId: 'BEAUTY-01', password: 'beauty123', section: 'beauty', role: 'user' },
+      { name: 'Bangles Manager', sectionId: 'BANGLES-01', password: 'bangles123', section: 'bangles', role: 'user' },
     ];
     for (const u of users) {
       await new User(u).save();
