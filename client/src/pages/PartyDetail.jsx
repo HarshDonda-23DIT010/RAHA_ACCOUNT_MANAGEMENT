@@ -1,11 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
-import { ArrowLeftIcon, PhoneIcon, ClipboardDocumentListIcon, ArrowDownRightIcon, ArrowUpRightIcon, PaperClipIcon, TrashIcon, PlusIcon, CameraIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PhoneIcon, ClipboardDocumentListIcon, ArrowDownRightIcon, ArrowUpRightIcon, PaperClipIcon, TrashIcon, PlusIcon, CameraIcon, XMarkIcon, CalendarDaysIcon, FunnelIcon } from '@heroicons/react/24/outline';
 
 const fmt = (n) => `₹${Math.abs(Number(n || 0)).toLocaleString('en-IN')}`;
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const daysAgoStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+const monthStartStr = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
+
+const DATE_PRESETS = [
+  { label: 'Today',      from: todayStr,      to: todayStr },
+  { label: 'This Week',  from: () => daysAgoStr(6), to: todayStr },
+  { label: 'This Month', from: monthStartStr, to: todayStr },
+  { label: 'Last 3 Mon', from: () => daysAgoStr(89), to: todayStr },
+];
 
 export default function PartyDetail() {
   const { id } = useParams();
@@ -22,6 +32,12 @@ export default function PartyDetail() {
     type: 'in', amount: '', note: '', date: new Date().toISOString().slice(0, 10), billImage: null,
   });
 
+  // Date filter state
+  const [showFilter, setShowFilter] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [activePreset, setActivePreset] = useState('');
+
   const load = useCallback(async () => {
     try {
       const [p, t] = await Promise.all([
@@ -37,6 +53,52 @@ export default function PartyDetail() {
 
   const isBeauty = party?.section === 'beauty';
   const themeGrad = isBeauty ? 'from-pink-500 to-rose-400' : 'from-amber-500 to-yellow-400';
+  const themeColor = isBeauty ? 'text-brand-600' : 'text-amber-600';
+  const themeBorder = isBeauty ? 'border-brand-400' : 'border-amber-400';
+  const themeBg = isBeauty ? 'bg-pink-50' : 'bg-amber-50';
+
+  // Filtered transactions
+  const isFilterActive = dateFrom || dateTo;
+
+  const filteredTxns = useMemo(() => {
+    if (!isFilterActive) return txns;
+    return txns.filter(txn => {
+      const txnDate = new Date(txn.date);
+      if (dateFrom) {
+        const from = new Date(dateFrom); from.setHours(0, 0, 0, 0);
+        if (txnDate < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo); to.setHours(23, 59, 59, 999);
+        if (txnDate > to) return false;
+      }
+      return true;
+    });
+  }, [txns, dateFrom, dateTo, isFilterActive]);
+
+  // Filtered period totals
+  const periodTotals = useMemo(() => {
+    return filteredTxns.reduce(
+      (acc, t) => {
+        if (t.type === 'in') acc.cashIn += t.amount;
+        else acc.cashOut += t.amount;
+        return acc;
+      },
+      { cashIn: 0, cashOut: 0 }
+    );
+  }, [filteredTxns]);
+
+  const applyPreset = (preset) => {
+    setDateFrom(preset.from());
+    setDateTo(preset.to());
+    setActivePreset(preset.label);
+  };
+
+  const clearFilter = () => {
+    setDateFrom('');
+    setDateTo('');
+    setActivePreset('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -118,47 +180,171 @@ export default function PartyDetail() {
         </div>
       </div>
 
-      {/* Transactions */}
-      <div className="px-4 md:px-8 lg:px-12 mt-4 space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3 md:col-span-full">Transactions</h3>
-        {txns.length === 0 && (
-          <div className="text-center py-16 text-gray-400 md:col-span-full flex flex-col items-center">
-            <ClipboardDocumentListIcon className="w-12 h-12 mb-3 text-gray-300" />
-            <p className="font-medium">No transactions yet</p>
-            <p className="text-sm">Tap + to add a transaction</p>
-          </div>
-        )}
-        {txns.map(txn => (
-          <div key={txn._id} id={`txn-${txn._id}`}
-            className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${txn.type === 'in' ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
-                  {txn.type === 'in' ? <ArrowDownRightIcon className="w-6 h-6 stroke-2" /> : <ArrowUpRightIcon className="w-6 h-6 stroke-2" />}
-                </div>
-                <div>
-                  <p className={`font-bold text-base ${txn.type === 'in' ? 'text-green-600' : 'text-red-500'}`}>
-                    {txn.type === 'in' ? '+' : '-'}{fmt(txn.amount)}
-                  </p>
-                  {txn.note && <p className="text-xs text-gray-500 mt-0.5">{txn.note}</p>}
-                  <p className="text-xs text-gray-400 mt-0.5">{fmtDate(txn.date)}</p>
-                </div>
+      {/* Transactions Section */}
+      <div className="px-4 md:px-8 lg:px-12 mt-4">
+
+        {/* Section header + Filter toggle */}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+            Transactions
+            {isFilterActive && (
+              <span className={`ml-2 ${themeColor} normal-case font-bold`}>
+                ({filteredTxns.length} of {txns.length})
+              </span>
+            )}
+          </h3>
+          <button
+            id="txn-filter-toggle"
+            onClick={() => setShowFilter(v => !v)}
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${
+              isFilterActive
+                ? `${themeColor} ${themeBorder} ${themeBg} border-current`
+                : 'border-gray-200 text-gray-500 bg-white hover:border-gray-300'
+            }`}>
+            <FunnelIcon className="w-3.5 h-3.5" />
+            {isFilterActive ? 'Filtered' : 'Filter by Date'}
+            {isFilterActive && (
+              <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">✓</span>
+            )}
+          </button>
+        </div>
+
+        {/* Date Filter Panel */}
+        {showFilter && (
+          <div className="bg-white border-2 border-gray-100 rounded-2xl p-4 mb-4 shadow-sm space-y-3">
+            {/* Panel header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDaysIcon className={`w-4 h-4 ${themeColor}`} />
+                <span className="text-sm font-bold text-gray-700">Filter by Bill Date</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {txn.billImage && (
-                  <a href={`/uploads/${txn.billImage}`} target="_blank" rel="noreferrer"
-                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg font-medium flex items-center gap-1 hover:bg-blue-100 transition">
-                    <PaperClipIcon className="w-4 h-4" /> Bill
-                  </a>
-                )}
-                <button onClick={() => handleDelete(txn._id)} disabled={deleting === txn._id}
-                  className="text-xs bg-red-50 text-red-400 rounded-lg hover:bg-red-100 transition flex items-center justify-center h-6 w-6">
-                  {deleting === txn._id ? '…' : <TrashIcon className="w-4 h-4" />}
+              {isFilterActive && (
+                <button onClick={clearFilter}
+                  className="text-xs text-red-500 font-semibold flex items-center gap-1 hover:text-red-600 transition">
+                  <XMarkIcon className="w-3.5 h-3.5" /> Clear
                 </button>
+              )}
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap gap-2">
+              {DATE_PRESETS.map(preset => (
+                <button
+                  key={preset.label}
+                  id={`preset-${preset.label.replace(/\s+/g, '-').toLowerCase()}`}
+                  onClick={() => applyPreset(preset)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-all ${
+                    activePreset === preset.label
+                      ? `${themeColor} ${themeBorder} ${themeBg} border-current`
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-gray-50'
+                  }`}>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom From / To */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">From</label>
+                <input
+                  id="filter-from"
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || todayStr()}
+                  onChange={e => { setDateFrom(e.target.value); setActivePreset(''); }}
+                  className={`w-full border-2 rounded-xl px-3 py-2 text-sm focus:outline-none transition ${dateFrom ? themeBorder : 'border-gray-200'}`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">To</label>
+                <input
+                  id="filter-to"
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom}
+                  max={todayStr()}
+                  onChange={e => { setDateTo(e.target.value); setActivePreset(''); }}
+                  className={`w-full border-2 rounded-xl px-3 py-2 text-sm focus:outline-none transition ${dateTo ? themeBorder : 'border-gray-200'}`}
+                />
               </div>
             </div>
+
+            {/* Period Summary — shows when filter is active */}
+            {isFilterActive && filteredTxns.length > 0 && (
+              <div className={`rounded-xl p-3 ${themeBg} grid grid-cols-3 gap-2 text-center`}>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide">Cash In</p>
+                  <p className="text-green-600 font-bold text-sm">{fmt(periodTotals.cashIn)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide">Cash Out</p>
+                  <p className="text-red-500 font-bold text-sm">{fmt(periodTotals.cashOut)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide">Net</p>
+                  <p className={`font-bold text-sm ${periodTotals.cashIn >= periodTotals.cashOut ? 'text-green-600' : 'text-red-500'}`}>
+                    {periodTotals.cashIn >= periodTotals.cashOut ? '+' : '-'}{fmt(periodTotals.cashIn - periodTotals.cashOut)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* No results message */}
+            {isFilterActive && filteredTxns.length === 0 && (
+              <p className="text-xs text-center text-gray-400 py-1">No transactions in this date range</p>
+            )}
           </div>
-        ))}
+        )}
+
+        {/* Transaction List */}
+        <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4">
+          {filteredTxns.length === 0 && txns.length === 0 && (
+            <div className="text-center py-16 text-gray-400 md:col-span-full flex flex-col items-center">
+              <ClipboardDocumentListIcon className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="font-medium">No transactions yet</p>
+              <p className="text-sm">Tap + to add a transaction</p>
+            </div>
+          )}
+          {filteredTxns.length === 0 && txns.length > 0 && (
+            <div className="text-center py-12 text-gray-400 md:col-span-full flex flex-col items-center">
+              <CalendarDaysIcon className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="font-medium">No transactions in this date range</p>
+              <button onClick={clearFilter} className={`text-sm underline mt-1 ${themeColor}`}>Clear filter</button>
+            </div>
+          )}
+          {filteredTxns.map(txn => (
+            <div key={txn._id} id={`txn-${txn._id}`}
+              className="bg-white rounded-xl shadow-sm p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${txn.type === 'in' ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
+                    {txn.type === 'in' ? <ArrowDownRightIcon className="w-6 h-6 stroke-2" /> : <ArrowUpRightIcon className="w-6 h-6 stroke-2" />}
+                  </div>
+                  <div>
+                    <p className={`font-bold text-base ${txn.type === 'in' ? 'text-green-600' : 'text-red-500'}`}>
+                      {txn.type === 'in' ? '+' : '-'}{fmt(txn.amount)}
+                    </p>
+                    {txn.note && <p className="text-xs text-gray-500 mt-0.5">{txn.note}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">{fmtDate(txn.date)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {txn.billImage && (
+                    <a href={`/uploads/${txn.billImage}`} target="_blank" rel="noreferrer"
+                      className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg font-medium flex items-center gap-1 hover:bg-blue-100 transition">
+                      <PaperClipIcon className="w-4 h-4" /> Bill
+                    </a>
+                  )}
+                  <button onClick={() => handleDelete(txn._id)} disabled={deleting === txn._id}
+                    className="text-xs bg-red-50 text-red-400 rounded-lg hover:bg-red-100 transition flex items-center justify-center h-6 w-6">
+                    {deleting === txn._id ? '…' : <TrashIcon className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* FAB */}
